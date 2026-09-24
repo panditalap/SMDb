@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SMDb - School Master Database</title>
+    <meta name="description" content="Master repository for school details featuring role-based access control, Tabulator progressive loading, UDISE lookup API, and full CRUD administration." />
+    <meta property="og:title" content="SMDb - School Master Database" />
+    <meta property="og:description" content="Master repository for school details featuring role-based access control, Tabulator progressive loading, UDISE lookup API, and full CRUD administration." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Tabulator Bootstrap 5 Theme -->
+    <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.5/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/src/index.css">
+  </head>
+  <body>
+    <!-- Top Bar Shell -->
+    <header id="top-bar">
+      <a class="topbar-brand" href="#schools">
+        <div class="brand-icon">
+          <i class="bi bi-mortarboard-fill"></i>
+        </div>
+        <div>
+          <span class="app-title">SMDb</span>
+          <span class="app-subtitle">School Master Database</span>
+        </div>
+      </a>
+
+      <div class="topbar-right">
+        <div id="UserLabel">
+          <i class="bi bi-person"></i>
+          <span>Guest</span>
+        </div>
+        <button class="btn-logout" id="btn-logout-main">
+          <i class="bi bi-box-arrow-in-right"></i>
+          <span class="logout-text">Login</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Page Navigation Strip (Multipage Navigation) -->
+    <nav id="page-tabs-bar">
+      <a href="#schools" class="page-tab-btn active" data-page="schools">
+        <i class="bi bi-table"></i>
+        <span>Page 1: School Master</span>
+      </a>
+      <a href="#udise-api" class="page-tab-btn" data-page="udise-api">
+        <i class="bi bi-lightning-charge"></i>
+        <span>Page 2: UDISE Lookup API and Integration</span>
+      </a>
+      <a href="#users" class="page-tab-btn" data-page="users">
+        <i class="bi bi-people-fill"></i>
+        <span>Page 3: User Management</span>
+      </a>
+      <a href="/public/lookup-sample.html" target="_blank" class="page-tab-btn text-primary ms-auto" style="border-bottom-color: transparent !important;">
+        <i class="bi bi-box-arrow-up-right"></i>
+        <span>External Web Page Demo</span>
+      </a>
+    </nav>
+
+    <!-- Main Scrollable App Content -->
+    <main id="app-page">
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- PAGE 1: SCHOOL MASTER                                  -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <section id="page-schools" class="app-page-pane">
+        <!-- Stat Cards Grid -->
+        <div class="stat-grid">
+          <div class="stat-card blue">
+            <i class="bi bi-buildings stat-icon text-primary"></i>
+            <div class="stat-label">Total Schools</div>
+            <div class="stat-value" id="stat-total-schools">0</div>
+          </div>
+          <div class="stat-card green">
+            <i class="bi bi-geo-alt stat-icon text-success"></i>
+            <div class="stat-label">Districts Covered</div>
+            <div class="stat-value" id="stat-districts">0</div>
+          </div>
+          <div class="stat-card violet">
+            <i class="bi bi-award stat-icon" style="color: #a353a3;"></i>
+            <div class="stat-label">Grant in Aid</div>
+            <div class="stat-value" id="stat-grant-aid">0</div>
+          </div>
+          <div class="stat-card amber">
+            <i class="bi bi-bank2 stat-icon text-warning"></i>
+            <div class="stat-label">Government</div>
+            <div class="stat-value" id="stat-government">0</div>
+          </div>
+        </div>
+
+        <!-- Table Card with Toolbar -->
+        <div class="table-card" id="schools-master-card">
+          <div class="table-toolbar">
+            <div class="toolbar-left">
+              <div class="toolbar-title d-none d-md-inline me-1">
+                <i class="bi bi-mortarboard me-1"></i>Schools
+              </div>
+              <div class="record-count" id="schools-rec-count">—</div>
+              <button class="btn-tb ghost" onclick="SchoolsDataMaster.exportToExcel();" title="Export active data to Excel">
+                💾 <span>Excel</span>
+              </button>
+              <select class="filter-select" id="filter-district-select">
+                <option value="">All Districts</option>
+              </select>
+              <select class="filter-select" id="filter-type-select">
+                <option value="">All School Types</option>
+                <option value="Grant in Aid">Grant in Aid</option>
+                <option value="Government">Government</option>
+                <option value="Private">Private</option>
+              </select>
+            </div>
+
+            <div class="toolbar-right">
+              <div class="search-wrap">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" id="schools-search" placeholder="Search all…"
+                  oninput="SchoolsDataMaster.search(this.value)">
+              </div>
+              <!-- Hidden until rows selected -->
+              <button class="btn-tb ghost d-none" id="schools-btn-show-sel"
+                onclick="SchoolsDataMaster.toggleSelected()" title="Show only selected rows">
+                ☑ <span>Selected</span>
+                <span class="sel-badge" id="schools-sel-badge">0</span>
+              </button>
+              <button class="btn-tb ghost" onclick="SchoolsDataMaster.clear()" title="Reset all filters">
+                ✕ <span>Clear</span>
+              </button>
+              <button class="btn-tb ghost" onclick="SchoolsDataMaster.showColumns()" title="Choose visible columns">
+                ⊞ <span>Columns</span>
+              </button>
+              <button class="btn-tb amber-btn d-none" id="schools-btn-add" title="Add a new school record">
+                + <span>Add School</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabulator Table Wrapper -->
+          <div id="tabulator-table-wrapper">
+            <div class="tabulator-element" id="schools-tabulator-table"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- PAGE 2: UDISE LOOKUP API AND INTEGRATION               -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <section id="page-udise-api" class="app-page-pane d-none">
+        <div class="row g-4">
+          <div class="col-lg-6">
+            <!-- Documentation Card -->
+            <div class="table-card p-4">
+              <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-3">
+                <h5 class="fw-bold mb-0 text-dark">
+                  <i class="bi bi-code-square me-2 text-primary"></i>UDISE Lookup API Specification
+                </h5>
+                <span class="pill pill-green">CORS Enabled</span>
+              </div>
+              <p class="text-muted small">
+                The SMDb platform provides a public, cross-origin compatible REST endpoint for third-party admission portals, scholarship verification systems, and state education applications. Any external website can fetch complete 30-field school metadata asynchronously using <code>fetch()</code> without needing authentication credentials.
+              </p>
+
+              <!-- API Endpoints Info -->
+              <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                  <div class="p-3 bg-light rounded-3 border h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="pill pill-blue font-monospace fw-bold">GET</span>
+                      <small class="text-success fw-bold"><i class="bi bi-broadcast me-1"></i>CORS Open</small>
+                    </div>
+                    <div class="font-monospace small text-dark fw-bold mb-1">/api/schools/udise/:code</div>
+                    <div class="small text-muted">Fetch master record to pre-fill external registration forms.</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="p-3 bg-light rounded-3 border h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="pill pill-green font-monospace fw-bold">POST / PUT</span>
+                      <small class="text-primary fw-bold"><i class="bi bi-clock-history me-1"></i>Auto Timestamp</small>
+                    </div>
+                    <div class="font-monospace small text-dark fw-bold mb-1">/api/schools/udise/:code</div>
+                    <div class="small text-muted">Upsert school data: update existing or insert new school with timestamp.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Interactive Live Sandbox -->
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h6 class="fw-bold text-dark mb-0">Interactive Live Sandbox:</h6>
+                <div class="btn-group btn-group-sm" role="group">
+                  <button type="button" class="btn btn-outline-primary active" id="btn-tab-mode-get" onclick="UDISEApiPage.setMode('GET')">GET (Fetch)</button>
+                  <button type="button" class="btn btn-outline-primary" id="btn-tab-mode-post" onclick="UDISEApiPage.setMode('POST')">POST (Sync / Upsert)</button>
+                </div>
+              </div>
+
+              <div class="input-group mb-2">
+                <span class="input-group-text bg-white" id="sandbox-method-label"><i class="bi bi-search"></i></span>
+                <input type="text" id="sandbox-udise-input" class="form-control font-monospace fw-bold" placeholder="Enter 11-digit UDISE..." value="24070101201">
+                <button class="btn btn-primary px-3 fw-semibold" id="btn-sandbox-fetch">
+                  <span id="sandbox-spinner" class="spinner-border spinner-border-sm me-1 d-none"></span>
+                  <span id="sandbox-action-btn-text">Query API</span>
+                </button>
+              </div>
+
+              <!-- POST Payload Editor (Hidden in GET mode) -->
+              <div id="sandbox-post-container" class="mb-3 d-none">
+                <label class="form-label small fw-bold text-secondary mb-1">
+                  Sync Payload (Edit to test updating Principal, Contact, etc.):
+                </label>
+                <textarea id="sandbox-post-payload" class="form-control font-monospace small bg-light" rows="7">{
+  "Sch_Name": "Sheth C. N. Vidyalaya & Higher Secondary School",
+  "Sch_Principal": "Dr. Rajesh K. Trivedi",
+  "Sch_Principal_No": "+91 98250 88776",
+  "Sch_Principal_Email": "principal.new@edu.gov.in",
+  "Sch_EC_Teacher": "Shri Ashok Dave",
+  "Bank": "State Bank of India",
+  "Branch": "Ambawadi Ahmedabad"
+}</textarea>
+              </div>
+
+              <!-- Quick Test Buttons -->
+              <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+                <small class="text-muted fw-semibold">Quick Test Codes:</small>
+                <button class="btn btn-sm btn-outline-secondary py-0 font-monospace btn-test-udise" data-code="24070101201">24070101201 (Ahmedabad)</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 font-monospace btn-test-udise" data-code="24220303402">24220303402 (Sanand)</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 font-monospace btn-test-udise" data-code="24220508903">24220508903 (Surat)</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 font-monospace btn-test-udise" data-code="24190102104">24190102104 (Vadodara)</button>
+              </div>
+
+              <div class="d-flex gap-2">
+                <a href="/public/lookup-sample.html" target="_blank" class="btn btn-outline-primary btn-sm">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>Launch External Registration Page Demo
+                </a>
+              </div>
+            </div>
+
+            <!-- Code Snippet Card -->
+            <div class="table-card overflow-hidden">
+              <div class="p-3 bg-dark text-white d-flex align-items-center justify-content-between">
+                <span class="fw-bold small"><i class="bi bi-file-code me-2 text-warning"></i>Client Webpage Integration Snippet (<span id="snippet-mode-label">GET & POST</span>)</span>
+                <button class="btn btn-outline-light btn-sm py-0" id="btn-copy-fetch-code">Copy JS</button>
+              </div>
+              <pre class="p-3 m-0 bg-dark text-light small font-monospace"><code id="code-snippet-fetch">// 1. GET: Fetch existing school info to pre-fill registration form
+async function fetchSchoolByUDISE(udiseCode) {
+  const res = await fetch(`https://your-domain.com/api/schools/udise/${encodeURIComponent(udiseCode)}`);
+  if (!res.ok) return null; // Not found: show empty registration form
+  return await res.json();
+}
+
+// 2. POST: Upsert (Update existing school or Add new school with latest timestamp)
+async function syncSchoolToSMDb(udiseCode, formData) {
+  const res = await fetch(`https://your-domain.com/api/schools/udise/${encodeURIComponent(udiseCode)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(formData)
+  });
+  return await res.json(); // returns { success, action: "updated"|"created", timestamp, data }
+}</code></pre>
+              <div class="p-2 bg-light border-top d-flex align-items-center justify-content-between small">
+                <span class="text-muted font-monospace" id="code-snippet-curl">curl -X GET "http://localhost:3000/api/schools/udise/24070101201"</span>
+                <button class="btn btn-outline-secondary btn-sm py-0" id="btn-copy-curl-code">Copy cURL</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sandbox Results Output -->
+          <div class="col-lg-6">
+            <div class="table-card p-4">
+              <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-3">
+                <h6 class="fw-bold mb-0 text-dark">
+                  <i class="bi bi-terminal me-2 text-primary"></i>Live Response Preview
+                </h6>
+                <span id="sandbox-status-badge" class="pill pill-grey">Ready</span>
+              </div>
+
+              <!-- Live Auto-Populated Card -->
+              <div id="sandbox-school-preview" class="p-3 rounded-3 bg-light border mb-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <span class="pill pill-dark font-monospace" id="preview-udise">24070101201</span>
+                  <span class="pill pill-green-lt text-success fw-bold"><i class="bi bi-check2 me-1"></i>Verified</span>
+                </div>
+                <h6 class="fw-bold text-dark mb-1" id="preview-name">Sheth C. N. Vidyalaya & Higher Secondary School</h6>
+                <div class="small text-muted mb-2">
+                  District: <span id="preview-district" class="fw-semibold">Ahmedabad</span> | Taluka: <span id="preview-taluka">AHMEDABAD CITY</span>
+                </div>
+                <div class="row g-2 small border-top pt-2">
+                  <div class="col-6"><strong>Principal:</strong> <span id="preview-principal">Dr. Rameshchandra S. Patel</span></div>
+                  <div class="col-6"><strong>Contact:</strong> <span id="preview-phone">+91 79 2646 1234</span></div>
+                  <div class="col-6"><strong>Bank:</strong> <span id="preview-bank">State Bank of India</span></div>
+                  <div class="col-6"><strong>IFSC:</strong> <span id="preview-ifsc" class="font-monospace">SBIN0002330</span></div>
+                </div>
+              </div>
+
+              <!-- Raw JSON Code Box -->
+              <div class="p-3 bg-dark rounded-3" style="max-height: 440px; overflow-y: auto;">
+                <pre class="mb-0 text-light font-monospace small"><code id="sandbox-json-output">// Click "Query API" to inspect live payload...</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- PAGE 3: USER MANAGEMENT                                -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <section id="page-users" class="app-page-pane d-none">
+        <!-- Non-Admin Notice Banner -->
+        <div id="users-nonadmin-notice" class="table-card p-5 text-center d-none">
+          <div class="text-warning fs-1 mb-2"><i class="bi bi-shield-lock-fill"></i></div>
+          <h4 class="fw-bold text-dark">Administrator Access Required</h4>
+          <p class="text-muted" style="max-width: 500px; margin: 0 auto 1.5rem;">
+            Only authenticated users with the <code>admin</code> role can view, create, or manage user accounts. Guest and Viewer roles have read-only access to school records.
+          </p>
+          <button class="btn btn-primary" onclick="document.getElementById('btn-logout-main').click()">
+            <i class="bi bi-box-arrow-in-right me-1"></i>Sign In as Admin
+          </button>
+        </div>
+
+        <!-- Admin Content -->
+        <div id="users-page-content" class="row g-4">
+          <!-- User Creation Card -->
+          <div class="col-lg-4">
+            <div class="table-card p-4">
+              <h5 class="fw-bold text-dark mb-3">
+                <i class="bi bi-person-plus-fill me-2 text-primary"></i>Add New User
+              </h5>
+              <div id="user-page-alert" class="alert alert-danger d-none py-2 px-3 small mb-3"></div>
+
+              <form id="form-create-user-page">
+                <div class="mb-3">
+                  <label class="form-label small fw-bold text-secondary">Username</label>
+                  <input type="text" id="new-usr-name" class="form-control" placeholder="e.g. coordinator_pune" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label small fw-bold text-secondary">Password</label>
+                  <input type="password" id="new-usr-pwd" class="form-control" placeholder="••••••••" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label small fw-bold text-secondary">Assigned Role</label>
+                  <select id="new-usr-role" class="form-select">
+                    <option value="viewer">Viewer (Read-Only Master Data)</option>
+                    <option value="admin">Admin (Full CRUD & User Management)</option>
+                  </select>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-semibold py-2" id="btn-create-user-page">
+                  <i class="bi bi-person-plus me-1"></i>Create Account
+                </button>
+              </form>
+
+              <hr class="my-4">
+              <div class="small text-muted">
+                <strong>Pre-seeded Defaults:</strong>
+                <ul class="mb-0 ps-3 mt-1">
+                  <li><code>admin</code> (Password: <code>Password@123</code>)</li>
+                  <li><code>viewer</code> (Password: <code>Viewer@123</code>)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Registered Users Table -->
+          <div class="col-lg-8">
+            <div class="table-card p-4">
+              <h5 class="fw-bold text-dark mb-3">
+                <i class="bi bi-people-fill me-2 text-primary"></i>Registered User Accounts
+              </h5>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light small text-uppercase">
+                    <tr>
+                      <th style="width: 60px;">ID</th>
+                      <th>Username</th>
+                      <th>Role</th>
+                      <th>Created</th>
+                      <th style="width: 70px;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-page-table-body" class="small">
+                    <!-- Populated by UsersPage module -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- MODAL: COLUMN VISIBILITY SELECTOR                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="modal fade" id="modal-column-selector" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-light py-3 border-bottom">
+            <h6 class="modal-title fw-bold text-dark">
+              ⊞ Show / Hide Columns
+            </h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-3">
+            <p class="small text-muted mb-2">Check or uncheck columns to toggle visibility in the Tabulator table:</p>
+            <div class="col-selector-grid" id="col-modal-body">
+              <!-- Dynamically populated by SchoolsDataMaster.showColumns() -->
+            </div>
+          </div>
+          <div class="modal-footer bg-light py-2">
+            <button type="button" class="btn btn-primary btn-sm px-3" data-bs-dismiss="modal">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- MODAL: ADD / EDIT SCHOOL (ALL 30 FIELDS)               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="modal fade" id="modal-school" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-light py-3 border-bottom">
+            <h5 class="modal-title fw-bold" id="modal-school-title">
+              <i class="bi bi-building-add me-2 text-primary"></i>School Form
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-3">
+            <div id="school-form-alert" class="alert alert-danger d-none mb-3"></div>
+
+            <form id="form-school">
+              <!-- Section 1: Basic Information -->
+              <div class="form-section-header">
+                <i class="bi bi-info-circle text-primary me-2"></i>1. Basic Information
+              </div>
+              <div class="row g-3 mb-2">
+                <div class="col-md-12">
+                  <label class="form-label fw-bold">School UDISE Code (Sch_UDISE) <span class="text-danger">*</span></label>
+                  <input type="text" id="field-Sch_UDISE" class="form-control font-monospace fw-bold" placeholder="e.g. 24070101201" required maxlength="20">
+                  <small class="text-muted">Unique 11-digit national UDISE identifier (prefixed with '#' automatically).</small>
+                </div>
+                <div class="col-12">
+                  <label class="form-label fw-bold">School Official Name (Sch_Name) <span class="text-danger">*</span></label>
+                  <input type="text" id="field-Sch_Name" class="form-control" placeholder="Complete registered name of the institution" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">School Type (Sch_Type) <span class="text-danger">*</span></label>
+                  <select id="field-Sch_Type" class="form-select" required>
+                    <option value="Grant in Aid">Grant in Aid</option>
+                    <option value="Government">Government</option>
+                    <option value="Private">Private</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Remarks</label>
+                  <textarea id="field-Remarks" class="form-control" rows="1" placeholder="Accreditation, grants, awards..."></textarea>
+                </div>
+              </div>
+
+              <!-- Section 2: Geographic & Location Details -->
+              <div class="form-section-header">
+                <i class="bi bi-geo-alt text-primary me-2"></i>2. Geographic & Location Details
+              </div>
+              <div class="row g-3 mb-2">
+                <div class="col-12">
+                  <label class="form-label fw-bold">Street Address (Sch_Address)</label>
+                  <input type="text" id="field-Sch_Address" class="form-control" placeholder="Campus address, street name, landmark">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">District (Sch_District)</label>
+                  <select id="field-Sch_District" class="form-select"></select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Taluka (Sch_Taluka)</label>
+                  <select id="field-Sch_Taluka" class="form-select">
+                    <option value="">Select Taluka...</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Place / City / Town (Sch_Place)</label>
+                  <input type="text" id="field-Sch_Place" class="form-control" placeholder="e.g. Ahmedabad, Sanand">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">PIN Code (Sch_Pincode)</label>
+                  <input type="text" id="field-Sch_Pincode" class="form-control font-monospace" placeholder="6-digit PIN" maxlength="10">
+                </div>
+              </div>
+
+              <!-- Section 3: Leadership & Contact Information -->
+              <div class="form-section-header">
+                <i class="bi bi-person-lines-fill text-primary me-2"></i>3. Leadership & Contact Information
+              </div>
+              <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">School Official Email (Sch_Email)</label>
+                  <input type="email" id="field-Sch_Email" class="form-control" placeholder="school@edu.gov.in">
+                </div>
+                <div class="col-md-6"></div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Principal Name (Sch_Principal)</label>
+                  <input type="text" id="field-Sch_Principal" class="form-control" placeholder="Principal Name">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Principal Mobile (Sch_Principal_No)</label>
+                  <input type="tel" id="field-Sch_Principal_No" class="form-control" placeholder="+91 98...">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Principal Email (Sch_Principal_Email)</label>
+                  <input type="email" id="field-Sch_Principal_Email" class="form-control" placeholder="principal@edu.gov.in">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Exam Coordinator Teacher (Sch_EC_Teacher)</label>
+                  <input type="text" id="field-Sch_EC_Teacher" class="form-control" placeholder="Coordinator Name">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">EC Teacher Phone (Sch_EC_Teacher_No)</label>
+                  <input type="tel" id="field-Sch_EC_Teacher_No" class="form-control" placeholder="+91 98...">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">EC Teacher Email (Sch_EC_Teacher_Em)</label>
+                  <input type="email" id="field-Sch_EC_Teacher_Em" class="form-control" placeholder="coordinator@edu.gov.in">
+                </div>
+              </div>
+
+              <!-- Section 4: Academic Structure -->
+              <div class="form-section-header">
+                <i class="bi bi-mortarboard text-primary me-2"></i>4. Academic Structure
+              </div>
+              <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Starting Standard (Std_From)</label>
+                  <input type="number" id="field-Std_From" class="form-control" placeholder="e.g. 1" min="1" max="12">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Terminal Standard (Std_To)</label>
+                  <input type="number" id="field-Std_To" class="form-control" placeholder="e.g. 12" min="1" max="12">
+                </div>
+              </div>
+
+              <!-- Section 5: Financial & Banking Information -->
+              <div class="form-section-header">
+                <i class="bi bi-bank text-primary me-2"></i>5. Financial & Banking Information
+              </div>
+              <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Account Holder Name (Account_Name)</label>
+                  <input type="text" id="field-Account_Name" class="form-control" placeholder="e.g. SMC General Fund Account">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Bank Account Number (Account_No)</label>
+                  <input type="text" id="field-Account_No" class="form-control font-monospace" placeholder="Bank Account Number">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Bank Name (Bank)</label>
+                  <input type="text" id="field-Bank" class="form-control" placeholder="State Bank of India">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Branch Name (Branch)</label>
+                  <input type="text" id="field-Branch" class="form-control" placeholder="Branch Name">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold">Bank IFSC Code (IFSC)</label>
+                  <input type="text" id="field-IFSC" class="form-control font-monospace" placeholder="SBIN0002330">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">PFMS Code (PFMS_Code)</label>
+                  <input type="text" id="field-PFMS_Code" class="form-control font-monospace" placeholder="GJAH0001234">
+                </div>
+              </div>
+
+              <!-- Section 6: Administrative & EEP Details -->
+              <div class="form-section-header">
+                <i class="bi bi-file-earmark-check text-primary me-2"></i>6. Administrative & EEP Details
+              </div>
+              <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">File ID (File_ID)</label>
+                  <input type="text" id="field-File_ID" class="form-control font-monospace" placeholder="DOC-SMDb-2026-001">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Document URL (File_Link)</label>
+                  <input type="url" id="field-File_Link" class="form-control" placeholder="https://example.gov.in/docs/...">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">EEP Registration (EEP_Reg)</label>
+                  <input type="text" id="field-EEP_Reg" class="form-control" placeholder="EEP-REG-2024-101">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">EEP Unique ID (EEP_ID)</label>
+                  <input type="text" id="field-EEP_ID" class="form-control font-monospace" placeholder="GJ-AH-EEP-01201">
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer border-top">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" form="form-school" class="btn btn-primary px-4 fw-semibold" id="btn-save-school">
+                 <i class="bi bi-check-circle me-1"></i>Save Record
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- MODAL: DETAIL VIEW (ALL 30 FIELDS)                     -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="modal fade" id="modal-detail" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-dark text-white py-3">
+            <div>
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="pill pill-green font-monospace fw-bold" id="detail-udise-badge">-</span>
+                <span class="pill pill-blue" id="detail-type-badge">-</span>
+              </div>
+              <h5 class="modal-title fw-bold text-white mb-0" id="detail-school-name">School Details</h5>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <div class="row g-4">
+              <!-- Location Card -->
+              <div class="col-md-6">
+                <div class="card h-100 border-0 bg-light p-3 rounded-3">
+                  <div class="fw-bold text-secondary text-uppercase small mb-2 border-bottom pb-1">Geographic Details</div>
+                  <dl class="row mb-0 small">
+                    <dt class="col-sm-4 text-muted">Full Address:</dt>
+                    <dd class="col-sm-8 fw-semibold" id="detail-address">-</dd>
+                    <dt class="col-sm-4 text-muted">Place / City:</dt>
+                    <dd class="col-sm-8" id="detail-place">-</dd>
+                    <dt class="col-sm-4 text-muted">Taluka:</dt>
+                    <dd class="col-sm-8" id="detail-taluka">-</dd>
+                    <dt class="col-sm-4 text-muted">District:</dt>
+                    <dd class="col-sm-8 fw-bold text-primary" id="detail-district">-</dd>
+                    <dt class="col-sm-4 text-muted">PIN Code:</dt>
+                    <dd class="col-sm-8 font-monospace" id="detail-pincode">-</dd>
+                    <dt class="col-sm-4 text-muted">Remarks:</dt>
+                    <dd class="col-sm-8" id="detail-remarks">-</dd>
+                  </dl>
+                </div>
+              </div>
+
+              <!-- Contact Card -->
+              <div class="col-md-6">
+                <div class="card h-100 border-0 bg-light p-3 rounded-3">
+                  <div class="fw-bold text-secondary text-uppercase small mb-2 border-bottom pb-1">Leadership & Contact</div>
+                  <dl class="row mb-0 small">
+                    <dt class="col-sm-4 text-muted">School Email:</dt>
+                    <dd class="col-sm-8" id="detail-email">-</dd>
+                    <dt class="col-sm-4 text-muted">Principal:</dt>
+                    <dd class="col-sm-8 fw-bold" id="detail-principal">-</dd>
+                    <dt class="col-sm-4 text-muted">Principal Phone:</dt>
+                    <dd class="col-sm-8" id="detail-principal-no">-</dd>
+                    <dt class="col-sm-4 text-muted">Principal Email:</dt>
+                    <dd class="col-sm-8" id="detail-principal-em">-</dd>
+                    <dt class="col-sm-4 text-muted">EC Teacher:</dt>
+                    <dd class="col-sm-8" id="detail-teacher">-</dd>
+                    <dt class="col-sm-4 text-muted">Teacher Phone:</dt>
+                    <dd class="col-sm-8" id="detail-teacher-no">-</dd>
+                  </dl>
+                </div>
+              </div>
+
+              <!-- Academic -->
+              <div class="col-md-4">
+                <div class="card h-100 border-0 bg-light p-3 rounded-3">
+                  <div class="fw-bold text-secondary text-uppercase small mb-2 border-bottom pb-1">Academic Structure</div>
+                  <dl class="row mb-0 small">
+                    <dt class="col-sm-6 text-muted">Starting Std:</dt>
+                    <dd class="col-sm-6 fw-bold" id="detail-std-from">-</dd>
+                    <dt class="col-sm-6 text-muted">Terminal Std:</dt>
+                    <dd class="col-sm-6 fw-bold" id="detail-std-to">-</dd>
+                  </dl>
+                </div>
+              </div>
+
+              <!-- Banking -->
+              <div class="col-md-4">
+                <div class="card h-100 border-0 bg-light p-3 rounded-3">
+                  <div class="fw-bold text-secondary text-uppercase small mb-2 border-bottom pb-1">Banking & Financial</div>
+                  <dl class="row mb-0 small">
+                    <dt class="col-sm-5 text-muted">Bank Name:</dt>
+                    <dd class="col-sm-7" id="detail-bank">-</dd>
+                    <dt class="col-sm-5 text-muted">Branch:</dt>
+                    <dd class="col-sm-7" id="detail-branch">-</dd>
+                    <dt class="col-sm-5 text-muted">Account No:</dt>
+                    <dd class="col-sm-7 font-monospace fw-semibold" id="detail-account-no">-</dd>
+                    <dt class="col-sm-5 text-muted">IFSC:</dt>
+                    <dd class="col-sm-7 font-monospace" id="detail-ifsc">-</dd>
+                    <dt class="col-sm-5 text-muted">PFMS:</dt>
+                    <dd class="col-sm-7 font-monospace" id="detail-pfms">-</dd>
+                  </dl>
+                </div>
+              </div>
+
+              <!-- Admin -->
+              <div class="col-md-4">
+                <div class="card h-100 border-0 bg-light p-3 rounded-3">
+                  <div class="fw-bold text-secondary text-uppercase small mb-2 border-bottom pb-1">Administrative & EEP</div>
+                  <dl class="row mb-0 small">
+                    <dt class="col-sm-5 text-muted">File ID:</dt>
+                    <dd class="col-sm-7 font-monospace" id="detail-file-id">-</dd>
+                    <dt class="col-sm-5 text-muted">Document:</dt>
+                    <dd class="col-sm-7" id="detail-file-link">-</dd>
+                    <dt class="col-sm-5 text-muted">EEP Reg:</dt>
+                    <dd class="col-sm-7" id="detail-eep-reg">-</dd>
+                    <dt class="col-sm-5 text-muted">EEP ID:</dt>
+                    <dd class="col-sm-7 font-monospace" id="detail-eep-id">-</dd>
+                    <dt class="col-sm-5 text-muted">Updated:</dt>
+                    <dd class="col-sm-7 text-muted" id="detail-timestamp">-</dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer bg-light py-2 d-flex justify-content-between">
+            <button class="btn btn-outline-primary btn-sm" id="detail-btn-test-api">
+              <i class="bi bi-lightning-charge me-1"></i>Test in Page 2 (UDISE Sandbox)
+            </button>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+              <button class="btn btn-primary btn-sm d-none" id="detail-btn-edit">
+                <i class="bi bi-pencil-square me-1"></i>Edit School
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- MODAL: DELETE CONFIRMATION                             -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="modal fade" id="modal-delete" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-danger text-white py-3">
+            <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle-fill me-2"></i>Confirm Deletion</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <p class="mb-3">Are you sure you want to permanently delete this school record from SMDb?</p>
+            <div class="p-3 bg-light rounded-3 border-start border-danger border-4">
+              <div class="fw-bold text-dark" id="delete-school-name">School Name</div>
+              <div class="small text-muted font-monospace mt-1">UDISE: <span id="delete-school-udise"></span></div>
+            </div>
+            <p class="small text-danger mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>This action is permanent and cannot be undone.</p>
+          </div>
+          <div class="modal-footer bg-light py-2 border-top">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger fw-semibold" id="btn-confirm-delete">
+              <i class="bi bi-trash me-1"></i>Yes, Permanently Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- MODAL: LOGIN / AUTHENTICATION                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="modal fade" id="modal-login" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+        <div class="modal-content border-0 shadow-lg">
+          <div class="modal-header bg-dark text-white py-3">
+            <h5 class="modal-title fw-bold"><i class="bi bi-shield-lock me-2 text-warning"></i>SMDb Authentication</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <div id="login-error-alert" class="alert alert-danger d-none py-2 px-3 small mb-3"></div>
+
+            <form id="form-login">
+              <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">Username</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-person"></i></span>
+                  <input type="text" id="login-username" class="form-control" required placeholder="admin">
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">Password</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white"><i class="bi bi-key"></i></span>
+                  <input type="password" id="login-password" class="form-control" required placeholder="••••••••">
+                </div>
+              </div>
+
+              <!-- Quick Demo Credentials -->
+              <div class="mb-4 p-2 bg-light rounded-3 border">
+                <div class="small text-muted fw-semibold mb-1">Pre-seeded Credentials:</div>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-outline-dark btn-sm py-0 small" onclick="document.getElementById('login-username').value='admin'; document.getElementById('login-password').value='Password@123';">
+                    Admin: <code>admin</code>
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm py-0 small" onclick="document.getElementById('login-username').value='viewer'; document.getElementById('login-password').value='Viewer@123';">
+                    Viewer: <code>viewer</code>
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary w-100 fw-semibold py-2">
+                <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container" style="z-index: 1090;"></div>
+
+    <!-- External CDNs -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.5/dist/js/tabulator.min.js"></script>
+
+    <!-- Main Client Application -->
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>

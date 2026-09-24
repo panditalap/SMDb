@@ -1,0 +1,207 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "Master school record with educational, administrative, and banking details",
+      "type": "object",
+      "properties": {
+        "Sch_UDISE": {
+          "type": "string",
+          "description": "11-digit UDISE code prefixed with # to preserve leading zeros",
+          "maxLength": 20
+        },
+        "Sch_Name": {
+          "type": "string",
+          "description": "Official name of the school",
+          "maxLength": 255
+        },
+        "Sch_Address": {
+          "type": "string",
+          "description": "Physical street address of the school campus",
+          "maxLength": 500
+        },
+        "Sch_District": {
+          "type": "string",
+          "description": "District in which the school is located",
+          "maxLength": 100
+        },
+        "Sch_Taluka": {
+          "type": "string",
+          "description": "Taluka or block in which the school is located",
+          "maxLength": 100
+        },
+        "Sch_Place": {
+          "type": "string",
+          "description": "City, town, or village of the school",
+          "maxLength": 100
+        },
+        "Sch_Pincode": {
+          "type": "string",
+          "description": "Postal pincode",
+          "maxLength": 10
+        },
+        "Sch_Email": {
+          "type": "string",
+          "description": "Official institutional email address",
+          "maxLength": 150
+        },
+        "Sch_Principal": {
+          "type": "string",
+          "description": "Full name of the school Principal",
+          "maxLength": 150
+        },
+        "Sch_Principal_No": {
+          "type": "string",
+          "description": "Mobile contact number of the school Principal",
+          "maxLength": 50
+        },
+        "Sch_Principal_Email": {
+          "type": "string",
+          "description": "Official email address of the school Principal",
+          "maxLength": 150
+        },
+        "Sch_EC_Teacher": {
+          "type": "string",
+          "description": "Eco-Club / designated in-charge teacher name",
+          "maxLength": 150
+        },
+        "Sch_EC_Teacher_No": {
+          "type": "string",
+          "description": "Eco-Club / teacher mobile contact number",
+          "maxLength": 50
+        },
+        "Sch_EC_Teacher_Em": {
+          "type": "string",
+          "description": "Eco-Club / teacher email address",
+          "maxLength": 150
+        },
+        "Sch_Type": {
+          "type": "string",
+          "description": "School management category (e.g. Grant in Aid, Government, Private)",
+          "maxLength": 100
+        },
+        "Type": {
+          "type": "string",
+          "description": "Duplicate alias for school management type",
+          "maxLength": 100
+        },
+        "Std_From": {
+          "type": "string",
+          "description": "Starting class standard grade",
+          "maxLength": 10
+        },
+        "Std_To": {
+          "type": "string",
+          "description": "Ending class standard grade",
+          "maxLength": 10
+        },
+        "Account_Name": {
+          "type": "string",
+          "description": "Official title of the school bank account",
+          "maxLength": 200
+        },
+        "Account_No": {
+          "type": "string",
+          "description": "Bank account number prefixed with #",
+          "maxLength": 50
+        },
+        "Bank": {
+          "type": "string",
+          "description": "Bank name",
+          "maxLength": 150
+        },
+        "Branch": {
+          "type": "string",
+          "description": "Bank branch name",
+          "maxLength": 150
+        },
+        "IFSC": {
+          "type": "string",
+          "description": "11-character Indian Financial System Code",
+          "maxLength": 30
+        },
+        "PFMS_Code": {
+          "type": "string",
+          "description": "Public Financial Management System unique agency code",
+          "maxLength": 50
+        },
+        "File_ID": {
+          "type": "string",
+          "description": "Physical or digital archive file reference ID",
+          "maxLength": 50
+        },
+        "File_Link": {
+          "type": "string",
+          "description": "Cloud document or registration certificate link",
+          "maxLength": 500
+        },
+        "Remarks": {
+          "type": "string",
+          "description": "Administrative notes and status remarks",
+          "maxLength": 1000
+        },
+        "EEP_Reg": {
+          "type": "string",
+          "description": "Environmental Education Programme registration code",
+          "maxLength": 100
+        },
+        "EEP_ID": {
+          "type": "string",
+          "description": "Environmental Education Programme ID",
+          "maxLength": 100
+        },
+        "Timestamp": {
+          "type": "string",
+          "description": "ISO or SQL string representing the last updated timestamp"
+        }
+      },
+      "required": [
+        "Sch_UDISE",
+        "Sch_Name"
+      ]
+    },
+    "User": {
+      "title": "User",
+      "description": "Application user account with role-based access",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Unique username",
+          "maxLength": 50
+        },
+        "role": {
+          "type": "string",
+          "description": "User permission role",
+          "enum": [
+            "admin",
+            "viewer"
+          ]
+        },
+        "password_hash": {
+          "type": "string",
+          "description": "Hashed password using bcrypt",
+          "maxLength": 255
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Creation ISO date timestamp"
+        }
+      },
+      "required": [
+        "username",
+        "role"
+      ]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Collection of all Gujarat school master records identified by unique document ID"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of SMDb system users and administrator accounts"
+    }
+  }
+}

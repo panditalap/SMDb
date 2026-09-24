@@ -1,0 +1,327 @@
+{
+  "AHMEDABAD": [
+    "AHMEDABAD CITY",
+    "BAVLA",
+    "DASKROI",
+    "DETROJ",
+    "DHANDHUKA",
+    "DHOLERA",
+    "DHOLKA",
+    "MANDAL",
+    "SANAND",
+    "VIRAMGAM"
+  ],
+  "AMRELI": [
+    "AMRELI",
+    "BABRA",
+    "BAGASARA",
+    "DHARI",
+    "JAFRABAD",
+    "KHAMBHA",
+    "KUNKAVAV",
+    "LATHI",
+    "LILIYA MOTA",
+    "RAJULA",
+    "SAVARKUNDLA"
+  ],
+  "ANAND": [
+    "ANAND",
+    "ANKLAV",
+    "BORSAD",
+    "KHAMBHAT",
+    "PETLAD",
+    "SOJITRA",
+    "TARAPUR",
+    "UMRETH"
+  ],
+  "ARAVALLI": [
+    "BAYAD",
+    "BHILODA",
+    "DHANSURA",
+    "MALPUR",
+    "MEGHARAJ",
+    "MODASA"
+  ],
+  "BANASKANTHA": [
+    "AMIRGADH",
+    "DANTA",
+    "DANTIWADA",
+    "DEESA",
+    "DHANERA",
+    "HADAD",
+    "KANKREJ",
+    "OGAD",
+    "PALANPUR",
+    "VADGAM"
+  ],
+  "BHARUCH": [
+    "AMOD",
+    "ANKLESHWAR",
+    "BHARUCH",
+    "HANSOT",
+    "JAMBUSAR",
+    "JHAGADIA",
+    "NETRANG",
+    "VAGRA",
+    "VALIA"
+  ],
+  "BHAVNAGAR": [
+    "BHAVNAGAR",
+    "GARIYADHAR",
+    "GHOGHA",
+    "JESAR",
+    "MAHUVA",
+    "PALITANA",
+    "SIHOR",
+    "TALAJA",
+    "UMRALA",
+    "VALLABHIPUR"
+  ],
+  "BOTAD": [
+    "BARWALA",
+    "BOTAD",
+    "GADHADA (SWAMI.)",
+    "RANPUR"
+  ],
+  "CHHOTA UDEPUR": [
+    "BODELI",
+    "CHHOTA UDEPUR",
+    "JETPUR PAVI",
+    "KAWANT",
+    "NASWADI",
+    "SANKHEDA"
+  ],
+  "DAHOD": [
+    "DAHOD",
+    "DEVGADHBARIA",
+    "DHANPUR",
+    "FATEPURA",
+    "GARBADA",
+    "JHALOD",
+    "LIMKHEDA",
+    "SANJELI",
+    "SINGHVAD"
+  ],
+  "DANG": [
+    "AHWA",
+    "SUBIR",
+    "WAGHAI"
+  ],
+  "DEVBHUMI DWARKA": [
+    "BHANVAD",
+    "DWARKA",
+    "KALYANPUR",
+    "KHAMBHALIYA"
+  ],
+  "GANDHINAGAR": [
+    "DAHEGAM",
+    "GANDHINAGAR",
+    "KALOL",
+    "MANSA"
+  ],
+  "GIR SOMNATH": [
+    "GIR GADHADA",
+    "KODINAR",
+    "SUTRAPADA",
+    "TALALA",
+    "UNA",
+    "VERAVAL"
+  ],
+  "JAMNAGAR": [
+    "DHROL",
+    "JAMJODHPUR",
+    "JAMNAGAR",
+    "JODIYA",
+    "KALAVAD",
+    "LALPUR"
+  ],
+  "JUNAGADH": [
+    "BHESAN",
+    "JUNAGADH",
+    "KESHOD",
+    "MALIYA",
+    "MANAVADAR",
+    "MANGAROL",
+    "MANGROL (JUNAGADH)",
+    "MENDARDA",
+    "VANTHALI",
+    "VISAVADAR"
+  ],
+  "KACHCHH": [
+    "ABDASA",
+    "ANJAR",
+    "BHACHAU",
+    "BHUJ",
+    "GANDHIDHAM",
+    "LAKHPAT",
+    "MANDVI (KACHCHH)",
+    "MUNDRA",
+    "NAKHATRANA",
+    "RAPAR"
+  ],
+  "KHEDA": [
+    "GALATESHWAR",
+    "GALTESHWAR",
+    "KAPADVANJ",
+    "KATHLAL",
+    "KHEDA",
+    "MAHEMDAVAD",
+    "MAHUDHA",
+    "MATAR",
+    "NADIAD",
+    "THASRA",
+    "VASO"
+  ],
+  "MAHESANA": [
+    "BECHRAJI",
+    "GOZARIYA",
+    "JOTANA",
+    "KADI",
+    "KHERALU",
+    "MEHSANA",
+    "SATLASANA",
+    "UNJHA",
+    "VADNAGAR",
+    "VIJAPUR",
+    "VISNAGAR"
+  ],
+  "MAHISAGAR": [
+    "BALASINOR",
+    "KADANA",
+    "KHANPUR",
+    "LUNAWADA",
+    "SANTRAMPUR",
+    "VIRPUR"
+  ],
+  "MORBI": [
+    "HALVAD",
+    "MALIYA (MI)",
+    "MORBI",
+    "TANKARA",
+    "WANKANER"
+  ],
+  "NARMADA": [
+    "DEDIYAPADA",
+    "GARUDESHWAR",
+    "NANDOD",
+    "SAGBARA",
+    "TILAKWADA"
+  ],
+  "NAVSARI": [
+    "CHIKHLI",
+    "GANDEVI",
+    "JALALPORE",
+    "KHERGAM",
+    "NAVSARI",
+    "VANSDA"
+  ],
+  "PANCHMAHAL": [
+    "GHOGHAMBA",
+    "GODHRA",
+    "HALOL",
+    "JAMBUGHODA",
+    "KAALOL",
+    "MORVA (H)",
+    "SHEHERA"
+  ],
+  "PATAN": [
+    "CHANASMA",
+    "HARIJ",
+    "PATAN",
+    "RADHANPUR",
+    "SAMI",
+    "SANTALPUR",
+    "SARASWATI",
+    "SHANKESHWAR",
+    "SIDDHPUR"
+  ],
+  "PORBANDAR": [
+    "KUTIYANA",
+    "PORBANDAR",
+    "RANAVAV"
+  ],
+  "RAJKOT": [
+    "DHORAJI",
+    "GONDAL",
+    "JAMKANDORNA",
+    "JASDAN",
+    "JETPUR",
+    "KOTDA SANGANI",
+    "LODHIKA",
+    "PADDHARI",
+    "RAJKOT",
+    "UPLETA",
+    "VINCHHIYA"
+  ],
+  "SABARKANTHA": [
+    "HIMATNAGAR",
+    "IDAR",
+    "KHEDBRAHMA",
+    "POSHINA",
+    "PRANTIJ",
+    "TALOD",
+    "VADALI",
+    "VIJAYNAGAR"
+  ],
+  "SURAT": [
+    "BARDOLI",
+    "CHORYASI",
+    "KAMREJ",
+    "MAHUVA (SURAT)",
+    "MANDVI (SURAT)",
+    "MANGROL (SURAT)",
+    "OLPAD",
+    "PALSANA",
+    "SURAT (CITY)",
+    "UMARPADA"
+  ],
+  "SURENDRANAGAR": [
+    "CHOTILA",
+    "CHUDA",
+    "DASADA (PATDI)",
+    "DHRANGADHRA",
+    "LAKHTAR",
+    "LIMBDI",
+    "MULI",
+    "SAYLA",
+    "THANGADH",
+    "WADHWAN"
+  ],
+  "TAPI": [
+    "DOLVAN",
+    "KUKARMUNDA",
+    "NIZAR",
+    "SONGADH",
+    "UCHCHHAL",
+    "VALOD",
+    "VYARA"
+  ],
+  "VADODARA": [
+    "DABHOI",
+    "DESAR",
+    "KARJAN",
+    "PADRA",
+    "SAVLI",
+    "SINOR",
+    "VADODARA",
+    "VAGHODIYA"
+  ],
+  "VALSAD": [
+    "DHARAMPUR",
+    "KAPRADA",
+    "PARDI",
+    "UMARGAM",
+    "VALSAD",
+    "VAPI"
+  ],
+  "VAV-THARAD": [
+    "BHABHAR",
+    "DEODAR",
+    "DHARNIDHAR",
+    "LAKHNI",
+    "RAH",
+    "SUIGAM",
+    "THARAD",
+    "VAV"
+  ]
+}
