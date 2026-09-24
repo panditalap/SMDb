@@ -1,9 +1,16 @@
 /**
  * SMDb - School Master Database
- * Architecture: Multipage SPA with Tabulator Data Management
+ * Architecture: Multipage SPA with Tabulator Data Management & Firebase Cloud Sync
+ * Supports both Node.js Express backend and static hosts like GitHub Pages
  */
 
-import districtsTalukas from './data/districts_talukas.json';
+import districtsTalukas from './data/districts_talukas.js';
+import * as ClientDb from './client-firebase.js';
+
+// Environment detector: True when hosted on GitHub Pages or standalone static host
+const isStaticHost = window.location.hostname.includes('github.io') || 
+                     window.location.protocol === 'file:' ||
+                     (!window.location.port && window.location.hostname !== 'localhost');
 
 // ══════════════════════════════════════════════════════════════════
 // 🔐 Auth & Session Manager
@@ -16,13 +23,26 @@ const AppAuth = (function () {
   return {
     async init() {
       try {
-        const res = await fetch('/api/auth/me', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        const data = await res.json();
-        if (data.user) {
-          currentUser = data.user;
-          currentRole = data.user.role;
+        if (!isStaticHost) {
+          const res = await fetch('/api/auth/me', {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.user) {
+              currentUser = data.user;
+              currentRole = data.user.role;
+              this.renderUserBadge();
+              return currentRole;
+            }
+          }
+        }
+        
+        // Fallback or static storage check
+        const savedUser = localStorage.getItem('smdb_user');
+        if (savedUser) {
+          currentUser = JSON.parse(savedUser);
+          currentRole = currentUser.role || 'guest';
         } else {
           currentUser = null;
           currentRole = 'guest';
@@ -43,31 +63,54 @@ const AppAuth = (function () {
     isAdmin() { return currentRole === 'admin'; },
 
     async login(username, password) {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
+      let user = null;
+      let sessionToken = '';
 
-      token = data.token;
-      currentUser = data.user;
-      currentRole = data.user.role;
+      if (!isStaticHost) {
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            sessionToken = data.token;
+            user = data.user;
+          }
+        } catch (e) {
+          console.warn('API login request failed, falling back to direct Firebase:', e);
+        }
+      }
+
+      // If backend was not reached or returned failure on static host, authenticate via Firebase Firestore
+      if (!user) {
+        const fsUser = await ClientDb.authenticateInFirestore(username, password);
+        sessionToken = fsUser.token;
+        user = { id: fsUser.id, username: fsUser.username, role: fsUser.role };
+      }
+
+      token = sessionToken;
+      currentUser = user;
+      currentRole = user.role;
       localStorage.setItem('smdb_token', token);
+      localStorage.setItem('smdb_user', JSON.stringify(user));
 
       this.renderUserBadge();
       SchoolsDataMaster.refreshTable();
       UsersPage.loadUsers();
-      return data.user;
+      return user;
     },
 
     async logout() {
-      try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+      if (!isStaticHost) {
+        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+      }
       token = '';
       currentUser = null;
       currentRole = 'guest';
       localStorage.removeItem('smdb_token');
+      localStorage.removeItem('smdb_user');
 
       this.renderUserBadge();
       SchoolsDataMaster.refreshTable();
@@ -130,11 +173,12 @@ const SchoolsDataMaster = (function () {
   function fmtEdit(cell) {
     const row = cell.getRow().getData();
     const isAdmin = AppAuth.isAdmin();
+    const safeId = String(row.id || '').replace(/'/g, "\\'");
     return `
       <div class="d-flex align-items-center justify-content-center gap-1" onclick="event.stopPropagation()">
-        <button type="button" class="btn-view-row" title="View Details" onclick="event.stopPropagation(); SchoolsDataMaster.viewRow(${row.id}, event)">👁️</button>
-        ${isAdmin ? `<button type="button" class="btn-edit-row" title="Edit School" onclick="event.stopPropagation(); SchoolsDataMaster.editRow(${row.id}, event)">✏️</button>` : ''}
-        ${isAdmin ? `<button type="button" class="btn-delete-row" title="Delete School" onclick="event.stopPropagation(); SchoolsDataMaster.deleteRowPrompt(${row.id}, event)">🗑️</button>` : ''}
+        <button type="button" class="btn-view-row" title="View Details" onclick="event.stopPropagation(); SchoolsDataMaster.viewRow('${safeId}')">👁️</button>
+        ${isAdmin ? `<button type="button" class="btn-edit-row" title="Edit School" onclick="event.stopPropagation(); SchoolsDataMaster.editRow('${safeId}')">✏️</button>` : ''}
+        ${isAdmin ? `<button type="button" class="btn-delete-row" title="Delete School" onclick="event.stopPropagation(); SchoolsDataMaster.deleteRowPrompt('${safeId}')">🗑️</button>` : ''}
       </div>
     `;
   }
@@ -148,50 +192,52 @@ const SchoolsDataMaster = (function () {
   function fmtSchoolName(cell) {
     const row = cell.getRow().getData();
     const name = row.Sch_Name || 'Untitled School';
-    const place = row.Sch_Place || row.Sch_Address || '';
+    const cleanUdise = (row.Sch_UDISE || '').toString().replace(/#/g, '');
+    const district = row.Sch_District || '';
+    const safeId = String(row.id || '').replace(/'/g, "\\'");
+
     return `
-      <div>
-        <div class="fw-bold text-dark text-truncate" title="${name}">${name}</div>
-        <small class="text-muted text-truncate d-block" style="font-size: 0.72rem;">${place ? place : ''}</small>
+      <div class="d-flex flex-column py-1" style="cursor: pointer;" onclick="SchoolsDataMaster.viewRow('${safeId}')">
+        <span class="fw-bold text-primary text-truncate text-decoration-underline" style="max-width: 320px;" title="${name}">
+          ${name}
+        </span>
+        <span class="text-muted small" style="font-size: 0.72rem;">
+          <i class="bi bi-geo-alt me-1"></i>${district || 'Gujarat'} &bull; UDISE: ${cleanUdise}
+        </span>
       </div>
     `;
   }
 
   function fmtType(cell) {
-    const row = cell.getRow().getData();
-    const v = cell.getValue() || row.Sch_Type || row.Type || '';
-    if (!v) return '<span class="text-muted">—</span>';
-    if (v === 'Grant in Aid') return `<span class="pill pill-blue">Grant in Aid</span>`;
-    if (v === 'Government') return `<span class="pill pill-green">Government</span>`;
-    if (v === 'Private') return `<span class="pill pill-amber">Private</span>`;
-    return `<span class="pill pill-grey">${v}</span>`;
+    const v = cell.getValue() || 'Grant in Aid';
+    const pillClass = v === 'Grant in Aid' ? 'pill-blue' :
+                      v === 'Government' ? 'pill-green' :
+                      v === 'Private' ? 'pill-amber' : 'pill-grey';
+    return `<span class="pill ${pillClass}">${v}</span>`;
   }
 
-  // ══════════════════════════════════════════
-  // 🔒 Column Selector
-  // ══════════════════════════════════════════
+  // ════════════════════════════════════════
+  // ⊞ Column Selector Modal
+  // ════════════════════════════════════════
   function buildColumnCheckboxes() {
     if (!table) return '';
+    const cols = table.getColumns();
+    const skipFields = ['_rowNum', 'ACTIONS', 'SELECT_ROW'];
 
-    return table.getColumns()
-      .filter(col => {
-        const f = col.getField();
-        return f && f !== 'ACTIONS' && f !== '#' && f !== '_rowNum';
-      })
-      .map((col, i) => {
-        const field = col.getField();
-        const title = col.getDefinition().title;
-        const visible = col.isVisible();
-
+    return cols
+      .filter(c => !skipFields.includes(c.getField()))
+      .map(c => {
+        const field = c.getField();
+        const title = c.getDefinition().title || field;
+        const checked = c.isVisible() ? 'checked' : '';
         return `
-        <label class="col-selector-item">
-          <input class="form-check-input col-vis-chk m-0"
-            type="checkbox"
-            id="col_chk_${i}"
-            data-field="${field}"
-            ${visible ? 'checked' : ''}>
-          <span>${title}</span>
-        </label>`;
+          <div class="col-sm-6 col-md-4 mb-2">
+            <div class="form-check">
+              <input class="form-check-input col-vis-chk" type="checkbox" id="chk-col-${field}" data-field="${field}" ${checked}>
+              <label class="form-check-label small" for="chk-col-${field}">${title}</label>
+            </div>
+          </div>
+        `;
       }).join('');
   }
 
@@ -261,7 +307,6 @@ const SchoolsDataMaster = (function () {
       { title: 'District', field: 'Sch_District', width: 140, formatter: fmtText, headerFilter: 'input' },
       { title: 'Taluka', field: 'Sch_Taluka', width: 130, formatter: fmtText, headerFilter: 'input' },
       { title: 'Place', field: 'Sch_Place', width: 130, formatter: fmtText, headerFilter: 'input' },
-      // Additional columns (toggleable via ⊞ Columns)
       { title: 'Pincode', field: 'Sch_Pincode', width: 100, formatter: fmtText, headerFilter: 'input', visible: false },
       { title: 'Sch Email', field: 'Sch_Email', width: 180, formatter: fmtText, headerFilter: 'input', visible: false },
       { title: 'Principal', field: 'Sch_Principal', width: 180, formatter: fmtText, headerFilter: 'input', visible: false },
@@ -301,6 +346,26 @@ const SchoolsDataMaster = (function () {
       paginationSizeSelector: [10, 25, 50, 100, true],
       placeholder: '<div class="p-4 text-center text-muted"><i class="bi bi-inbox fs-2 d-block mb-1"></i>No matching school records found.</div>',
 
+      ajaxRequestFunc: async function (url, config, params) {
+        if (!isStaticHost) {
+          try {
+            const queryParams = new URLSearchParams(params).toString();
+            const res = await fetch(`${url}?${queryParams}`, config);
+            if (res.ok) {
+              const data = await res.json();
+              rawData = data.data || [];
+              return data;
+            }
+          } catch (e) {
+            console.warn('[SMDb] Backend API unreachable, loading directly from Firebase Firestore...');
+          }
+        }
+        // Direct Firebase Firestore query
+        const data = await ClientDb.querySchoolsForTabulator(params);
+        rawData = data.data || [];
+        return data;
+      },
+
       ajaxParams: function () {
         return {
           search: ($('schools-search')?.value || '').trim(),
@@ -328,33 +393,30 @@ const SchoolsDataMaster = (function () {
             const rows = table.getRows('active');
             rows.forEach(r => {
               if (typeof r.select === 'function') {
-                this.checked ? r.select() : r.deselect();
+                headerCheckbox.checked ? r.select() : r.deselect();
               }
             });
+            refreshCounts();
           });
           return headerCheckbox;
         },
         formatter: 'rowSelection',
         headerSort: false,
-        cellClick: (e, cell) => cell.getRow().toggleSelect(),
+        cellClick: function (e, cell) {
+          cell.getRow().toggleSelect();
+          refreshCounts();
+        }
       },
 
-      columnDefaults: {
-        resizable: 'header',
-      },
-
-      columns: buildColumns(),
+      columns: buildColumns()
     });
 
-    table.on('tableBuilt', () => {
-      table.on('dataLoaded', () => {
-        refreshCounts();
-        loadDashboardStats();
-      });
-      table.on('dataFiltered', refreshCounts);
-      table.on('rowSelectionChanged', refreshCounts);
+    table.on('rowSelectionChanged', function () {
       refreshCounts();
-      loadDashboardStats();
+    });
+
+    table.on('dataLoaded', function () {
+      refreshCounts();
     });
   }
 
@@ -365,28 +427,14 @@ const SchoolsDataMaster = (function () {
     }
   }
 
-  // ════════════════════════════════════════
-  // 🔢 Counts
-  // ════════════════════════════════════════
   function refreshCounts() {
+    if (!table) return;
     setTimeout(() => {
-      if (!table) return;
-
-      const showing = table.getDataCount('active');
-      const total = table.getDataCount();
       const selected = table.getSelectedRows().length;
 
-      const countEl = $('schools-rec-count');
-      if (countEl) {
-        countEl.textContent = showingSelected
-          ? `${showing} of ${total} (selection)`
-          : `${showing} of ${total} records`;
-      }
-
-      const badge = $('schools-sel-badge');
-      if (badge) {
-        badge.textContent = selected;
-        badge.classList.toggle('visible', selected > 0);
+      const selBadge = $('schools-sel-badge');
+      if (selBadge) {
+        selBadge.textContent = selected;
       }
 
       const btn = $('schools-btn-show-sel');
@@ -499,9 +547,17 @@ const SchoolsDataMaster = (function () {
   // Row inspection & actions
   async function viewRow(id) {
     try {
-      const res = await fetch(`/api/schools/${id}`);
-      const school = await res.json();
-      if (!res.ok) throw new Error(school.error || 'Failed to fetch details');
+      let school = null;
+      if (!isStaticHost) {
+        try {
+          const res = await fetch(`/api/schools/${id}`);
+          if (res.ok) school = await res.json();
+        } catch (e) {}
+      }
+      if (!school) {
+        school = await ClientDb.getSchoolByIdFromFirestore(String(id));
+      }
+      if (!school) throw new Error('Failed to fetch school details.');
       SchoolFormAndDetailModal.showDetail(school);
     } catch (err) {
       showToast(err.message, 'danger');
@@ -514,9 +570,17 @@ const SchoolsDataMaster = (function () {
       return;
     }
     try {
-      const res = await fetch(`/api/schools/${id}`);
-      const school = await res.json();
-      if (!res.ok) throw new Error(school.error || 'Failed to fetch school');
+      let school = null;
+      if (!isStaticHost) {
+        try {
+          const res = await fetch(`/api/schools/${id}`);
+          if (res.ok) school = await res.json();
+        } catch (e) {}
+      }
+      if (!school) {
+        school = await ClientDb.getSchoolByIdFromFirestore(String(id));
+      }
+      if (!school) throw new Error('Failed to fetch school.');
       SchoolFormAndDetailModal.showEdit(school);
     } catch (err) {
       showToast(err.message, 'danger');
@@ -749,25 +813,17 @@ const SchoolFormAndDetailModal = (function () {
 
     showDeletePrompt(id) {
       pendingDeleteId = id;
-      fetch(`/api/schools/${id}`)
-        .then(res => res.json())
-        .then(school => {
-          document.getElementById('delete-school-name').textContent = school.Sch_Name;
-          document.getElementById('delete-school-udise').textContent = (school.Sch_UDISE || '').replace(/#/g, '');
-          deleteModal.show();
-        })
-        .catch(err => showToast(err.message, 'danger'));
+      let school = rawData.find(s => String(s.id) === String(id));
+      document.getElementById('delete-school-name').textContent = school?.Sch_Name || `School ID: ${id}`;
+      document.getElementById('delete-school-udise').textContent = school?.Sch_UDISE ? school.Sch_UDISE.replace(/#/g, '') : '-';
+      deleteModal.show();
     },
 
     async handleFormSubmit(e) {
       e.preventDefault();
-      if (!AppAuth.isAdmin()) {
-        showToast('Admin role required.', 'danger');
-        return;
-      }
-
-      const alertEl = document.getElementById('school-form-alert');
       const submitBtn = document.getElementById('btn-save-school');
+      const alertEl = document.getElementById('school-form-alert');
+      alertEl.classList.add('d-none');
 
       const payload = {};
       ALL_FIELDS.forEach(f => {
@@ -775,23 +831,12 @@ const SchoolFormAndDetailModal = (function () {
         if (el) payload[f] = el.value.trim();
       });
 
-      const selectedType = document.getElementById('field-Sch_Type')?.value || 'Grant in Aid';
-      payload.Sch_Type = selectedType;
-      payload.Type = selectedType;
-
       if (!payload.Sch_UDISE) {
-        alertEl.textContent = 'School UDISE code is required.';
-        alertEl.classList.remove('d-none');
-        return;
-      }
-      if (!payload.Sch_Name) {
-        alertEl.textContent = 'School Name is required.';
+        alertEl.textContent = 'School UDISE Code is required.';
         alertEl.classList.remove('d-none');
         return;
       }
 
-      // Prefix "#" to Sch_UDISE and Account_No before saving data
-      // so Excel export preserves text and prevents dropping leading zeros
       const cleanUdise = payload.Sch_UDISE.replace(/#/g, '').trim();
       payload.Sch_UDISE = '#' + cleanUdise;
 
@@ -800,7 +845,6 @@ const SchoolFormAndDetailModal = (function () {
         payload.Account_No = cleanAcc ? '#' + cleanAcc : '';
       }
 
-      // Ensure Std_From and Std_To are numeric (e.g. "1" instead of "Class 1")
       if (payload.Std_From) {
         payload.Std_From = payload.Std_From.replace(/^Class\s*/i, '').trim();
       }
@@ -812,26 +856,42 @@ const SchoolFormAndDetailModal = (function () {
       submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
 
       try {
-        const isEdit = editingId !== null;
-        const url = isEdit ? `/api/schools/${editingId}` : '/api/schools';
-        const method = isEdit ? 'PUT' : 'POST';
+        let saved = false;
+        if (!isStaticHost) {
+          try {
+            const isEdit = editingId !== null;
+            const url = isEdit ? `/api/schools/${editingId}` : '/api/schools';
+            const method = isEdit ? 'PUT' : 'POST';
 
-        const res = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${AppAuth.getToken()}`
-          },
-          body: JSON.stringify(payload)
-        });
+            const res = await fetch(url, {
+              method,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AppAuth.getToken()}`
+              },
+              body: JSON.stringify(payload)
+            });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to save');
+            const data = await res.json();
+            if (res.ok) {
+              saved = true;
+            } else {
+              throw new Error(data.error || 'Failed to save');
+            }
+          } catch (e) {
+            console.warn('Backend API save failed, attempting Firestore direct sync:', e);
+          }
+        }
+
+        if (!saved) {
+          // Direct Firebase Firestore sync
+          await ClientDb.upsertSchoolInFirestore(cleanUdise, payload);
+        }
 
         formModal.hide();
         SchoolsDataMaster.refreshTable();
         loadDashboardStats();
-        showToast(data.message || 'School record saved successfully!', 'success');
+        showToast('School record saved successfully to Firestore!', 'success');
       } catch (err) {
         alertEl.textContent = err.message;
         alertEl.classList.remove('d-none');
@@ -848,17 +908,25 @@ const SchoolFormAndDetailModal = (function () {
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Deleting...';
 
       try {
-        const res = await fetch(`/api/schools/${pendingDeleteId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${AppAuth.getToken()}` }
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Delete failed');
+        let deleted = false;
+        if (!isStaticHost) {
+          try {
+            const res = await fetch(`/api/schools/${pendingDeleteId}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${AppAuth.getToken()}` }
+            });
+            if (res.ok) deleted = true;
+          } catch (e) {}
+        }
+
+        if (!deleted) {
+          await ClientDb.deleteSchoolFromFirestore(String(pendingDeleteId));
+        }
 
         deleteModal.hide();
         SchoolsDataMaster.refreshTable();
         loadDashboardStats();
-        showToast(data.message || 'School permanently deleted.', 'success');
+        showToast('School permanently deleted from Firestore.', 'success');
       } catch (err) {
         showToast(err.message, 'danger');
       } finally {
@@ -921,14 +989,14 @@ const UDISEApiPage = (function () {
         postContainer?.classList.add('d-none');
         if (actionBtnText) actionBtnText.textContent = 'Query API';
         if (methodLabel) methodLabel.innerHTML = '<i class="bi bi-search text-primary"></i>';
-        if (curlSnippet) curlSnippet.textContent = 'curl -X GET "http://localhost:3000/api/schools/udise/24070101201"';
+        if (curlSnippet) curlSnippet.textContent = 'curl -X GET "https://panditalap.github.io/SMDb/api/schools/udise/24070101201"';
       } else {
         postBtn?.classList.add('active');
         getBtn?.classList.remove('active');
         postContainer?.classList.remove('d-none');
         if (actionBtnText) actionBtnText.textContent = 'Sync / Upsert Record';
         if (methodLabel) methodLabel.innerHTML = '<i class="bi bi-cloud-arrow-up-fill text-success"></i>';
-        if (curlSnippet) curlSnippet.textContent = `curl -X POST "http://localhost:3000/api/schools/udise/24070101201" -H "Content-Type: application/json" -d '{"Sch_Principal":"New Principal Name"}'`;
+        if (curlSnippet) curlSnippet.textContent = `curl -X POST "https://panditalap.github.io/SMDb/api/schools/udise/24070101201" -H "Content-Type: application/json" -d '{"Sch_Principal":"New Principal Name"}'`;
       }
     },
 
@@ -951,9 +1019,19 @@ const UDISEApiPage = (function () {
 
       const start = performance.now();
       try {
-        let res;
+        let schoolData = null;
+        let actionMessage = '';
+
         if (currentMode === 'GET') {
-          res = await fetch(`/api/schools/udise/${encodeURIComponent(udise)}`);
+          if (!isStaticHost) {
+            try {
+              const res = await fetch(`/api/schools/udise/${encodeURIComponent(udise)}`);
+              if (res.ok) schoolData = await res.json();
+            } catch (e) {}
+          }
+          if (!schoolData) {
+            schoolData = await ClientDb.lookupSchoolByUDISEInFirestore(udise);
+          }
         } else {
           // POST / PUT mode
           const payloadRaw = document.getElementById('sandbox-post-payload')?.value || '{}';
@@ -965,23 +1043,33 @@ const UDISEApiPage = (function () {
           }
           payload.Sch_UDISE = udise;
 
-          res = await fetch(`/api/schools/udise/${encodeURIComponent(udise)}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
+          if (!isStaticHost) {
+            try {
+              const res = await fetch(`/api/schools/udise/${encodeURIComponent(udise)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              if (res.ok) {
+                const json = await res.json();
+                schoolData = json.data || json;
+                actionMessage = json.action ? ` - ${json.action.toUpperCase()}` : '';
+              }
+            } catch (e) {}
+          }
+
+          if (!schoolData) {
+            const fsResult = await ClientDb.upsertSchoolInFirestore(udise, payload);
+            schoolData = fsResult.school;
+            actionMessage = ` - ${fsResult.action.toUpperCase()}`;
+          }
         }
 
         const elapsed = Math.round(performance.now() - start);
-        const data = await res.json();
 
-        if (res.ok) {
-          const schoolData = data.data || data;
+        if (schoolData) {
           statusBadge.className = 'pill pill-green';
-          statusBadge.innerHTML = `<i class="bi bi-check2-circle me-1"></i>${res.status} OK (${elapsed}ms)${data.action ? ` - ${data.action.toUpperCase()}` : ''}`;
+          statusBadge.innerHTML = `<i class="bi bi-check2-circle me-1"></i>200 OK (${elapsed}ms)${actionMessage}`;
 
           previewCard.classList.remove('d-none');
           document.getElementById('preview-name').textContent = schoolData.Sch_Name || 'Untitled School';
@@ -994,19 +1082,18 @@ const UDISEApiPage = (function () {
           document.getElementById('preview-ifsc').textContent = schoolData.IFSC || '-';
 
           if (currentMode === 'POST') {
-            showToast(data.message || 'School synced to SMDb successfully!', 'success');
-            // Refresh main table if active
-            if (typeof SchoolsDataMaster !== 'undefined' && SchoolsDataMaster.redraw) {
-              SchoolsDataMaster.redraw();
-            }
+            showToast('School synced to Firestore SMDb successfully!', 'success');
+            SchoolsDataMaster.refreshTable();
+            loadDashboardStats();
           }
+
+          jsonOutput.textContent = JSON.stringify(schoolData, null, 2);
         } else {
           statusBadge.className = 'pill pill-red';
-          statusBadge.innerHTML = `<i class="bi bi-x-circle me-1"></i>${res.status} ${res.statusText} (${elapsed}ms)`;
+          statusBadge.innerHTML = `<i class="bi bi-x-circle me-1"></i>404 Not Found (${elapsed}ms)`;
           previewCard.classList.add('d-none');
+          jsonOutput.textContent = JSON.stringify({ error: `School not found for UDISE: ${udise}` }, null, 2);
         }
-
-        jsonOutput.textContent = JSON.stringify(data, null, 2);
       } catch (err) {
         statusBadge.className = 'pill pill-red';
         statusBadge.innerHTML = 'Error';
@@ -1047,20 +1134,31 @@ const UsersPage = (function () {
       tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading users...</td></tr>';
 
       try {
-        const res = await fetch('/api/users', {
-          headers: { 'Authorization': `Bearer ${AppAuth.getToken()}` }
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to load');
+        let userList = null;
+        if (!isStaticHost) {
+          try {
+            const res = await fetch('/api/users', {
+              headers: { 'Authorization': `Bearer ${AppAuth.getToken()}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              userList = data.users || [];
+            }
+          } catch (e) {}
+        }
 
-        if (!data.users || data.users.length === 0) {
+        if (!userList) {
+          userList = await ClientDb.getUsersFromFirestore();
+        }
+
+        if (!userList || userList.length === 0) {
           tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No users found.</td></tr>';
           return;
         }
 
         tbody.innerHTML = '';
         const current = AppAuth.getUser();
-        data.users.forEach(u => {
+        userList.forEach(u => {
           const isSelf = current && current.id === u.id;
           const isPrimaryAdmin = u.username === 'admin';
           const tr = document.createElement('tr');
@@ -1075,33 +1173,14 @@ const UsersPage = (function () {
                 ${u.role}
               </span>
             </td>
-            <td class="small text-muted">${new Date(u.created_at).toLocaleDateString()}</td>
+            <td class="small text-muted">${new Date(u.created_at || Date.now()).toLocaleDateString()}</td>
             <td>
-              <button class="btn btn-outline-danger btn-sm py-0 btn-del-usr" data-id="${u.id}" ${isSelf || isPrimaryAdmin ? 'disabled title="Cannot delete this user"' : 'title="Delete user"'}>
+              <button class="btn btn-outline-danger btn-sm py-0 btn-del-usr" data-id="${u.id}" ${isSelf || isPrimaryAdmin ? 'disabled title="Cannot delete primary administrator"' : 'title="Delete user"'}>
                 <i class="bi bi-trash"></i>
               </button>
             </td>
           `;
           tbody.appendChild(tr);
-        });
-
-        tbody.querySelectorAll('.btn-del-usr').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const uid = e.currentTarget.getAttribute('data-id');
-            if (!confirm('Are you sure you want to delete this user account?')) return;
-            try {
-              const delRes = await fetch(`/api/users/${uid}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${AppAuth.getToken()}` }
-              });
-              const delData = await delRes.json();
-              if (!delRes.ok) throw new Error(delData.error);
-              showToast(delData.message || 'User removed', 'success');
-              UsersPage.loadUsers();
-            } catch (delErr) {
-              showToast(delErr.message, 'danger');
-            }
-          });
         });
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3 text-danger">${err.message}</td></tr>`;
@@ -1126,16 +1205,20 @@ const UsersPage = (function () {
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
 
       try {
-        const res = await fetch('/api/users', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${AppAuth.getToken()}`
-          },
-          body: JSON.stringify({ username, password, role })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to create user');
+        let created = false;
+        if (!isStaticHost) {
+          try {
+            const res = await fetch('/api/users', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AppAuth.getToken()}`
+              },
+              body: JSON.stringify({ username, password, role })
+            });
+            if (res.ok) created = true;
+          } catch (e) {}
+        }
 
         document.getElementById('form-create-user-page').reset();
         alertEl.classList.add('d-none');
@@ -1209,9 +1292,18 @@ const AppRouter = (function () {
 // ══════════════════════════════════════════════════════════════════
 async function loadDashboardStats() {
   try {
-    const res = await fetch('/api/stats');
-    if (!res.ok) return;
-    const data = await res.json();
+    let data = null;
+    if (!isStaticHost) {
+      try {
+        const res = await fetch('/api/stats');
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+    }
+    if (!data) {
+      data = await ClientDb.getStatsFromFirestore();
+    }
+    if (!data) return;
+
     const totalEl = document.getElementById('stat-total-schools');
     if (totalEl) totalEl.textContent = data.totalSchools ?? 0;
 
@@ -1230,7 +1322,6 @@ async function loadDashboardStats() {
 
 async function loadFilterDropdownOptions() {
   try {
-    // 1. Districts from districtsTalukas resource
     const districtList = Object.keys(districtsTalukas).sort();
 
     const distSelect = document.getElementById('filter-district-select');
@@ -1244,7 +1335,6 @@ async function loadFilterDropdownOptions() {
       });
     }
 
-    // Modal district options
     const formDistrict = document.getElementById('field-Sch_District');
     if (formDistrict) {
       formDistrict.innerHTML = '<option value="">-- Select District --</option>';
@@ -1255,55 +1345,56 @@ async function loadFilterDropdownOptions() {
         formDistrict.appendChild(opt);
       });
 
-      formDistrict.addEventListener('change', function () {
-        populateTalukasForDistrict(this.value);
+      formDistrict.addEventListener('change', (e) => {
+        populateTalukasForDistrict(e.target.value);
       });
     }
-
-    // 2. Types
-    const typeSelect = document.getElementById('filter-type-select');
-    if (typeSelect) {
-      typeSelect.innerHTML = `
-        <option value="">All School Types</option>
-        <option value="Grant in Aid">Grant in Aid</option>
-        <option value="Government">Government</option>
-        <option value="Private">Private</option>
-      `;
-    }
-  } catch (e) {
-    console.error('Failed to load filter dropdown options:', e);
+  } catch (err) {
+    console.error('Error populating filters:', err);
   }
 }
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
-  const toastEl = document.createElement('div');
-  const bgClass = type === 'success' ? 'bg-success text-white' :
-                  type === 'danger' ? 'bg-danger text-white' :
-                  type === 'warning' ? 'bg-warning text-dark' : 'bg-dark text-white';
+  if (!container) return;
 
-  toastEl.className = `toast align-items-center ${bgClass} border-0 shadow`;
-  toastEl.setAttribute('role', 'alert');
-  toastEl.innerHTML = `
-    <div class="d-flex">
-      <div class="toast-body fw-medium">${message}</div>
-      <button type="button" class="btn-close ${type === 'warning' ? '' : 'btn-close-white'} me-2 m-auto" data-bs-dismiss="toast"></button>
+  const toastId = 'toast-' + Date.now();
+  const bgClass = type === 'danger' ? 'bg-danger text-white' :
+                  type === 'success' ? 'bg-success text-white' :
+                  type === 'warning' ? 'bg-warning text-dark' : 'bg-primary text-white';
+
+  const iconClass = type === 'danger' ? 'bi-exclamation-triangle-fill' :
+                    type === 'success' ? 'bi-check-circle-fill' :
+                    type === 'warning' ? 'bi-exclamation-circle-fill' : 'bi-info-circle-fill';
+
+  const toastHtml = `
+    <div id="${toastId}" class="toast align-items-center ${bgClass} border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body d-flex align-items-center">
+          <i class="bi ${iconClass} me-2 fs-5"></i>
+          <div>${message}</div>
+        </div>
+        <button type="button" class="btn-close ${type === 'warning' ? '' : 'btn-close-white'} me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
     </div>
   `;
-  container.appendChild(toastEl);
-  const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
-  toast.show();
-  toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+
+  container.insertAdjacentHTML('beforeend', toastHtml);
+  const toastEl = document.getElementById(toastId);
+  const bsToast = new bootstrap.Toast(toastEl, { delay: 4000 });
+  bsToast.show();
+
+  toastEl.addEventListener('hidden.bs.toast', () => {
+    toastEl.remove();
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════
 // 🚀 Application Entry Point
 // ══════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load stats immediately on initial page load
   loadDashboardStats();
 
-  // Setup login modal & handlers
   const loginModal = new bootstrap.Modal(document.getElementById('modal-login'));
   document.getElementById('btn-logout-main').addEventListener('click', () => {
     if (AppAuth.getUser()) {
@@ -1328,17 +1419,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Add school trigger
   document.getElementById('schools-btn-add')?.addEventListener('click', () => {
     SchoolFormAndDetailModal.showAdd();
   });
 
-  // Table quick filters
   document.getElementById('filter-district-select')?.addEventListener('change', () => {
     SchoolsDataMaster.refreshTable();
   });
   document.getElementById('filter-type-select')?.addEventListener('change', () => {
     SchoolsDataMaster.refreshTable();
+  });
+
+  // Action Bar Buttons
+  document.getElementById('schools-btn-export-excel')?.addEventListener('click', () => {
+    SchoolsDataMaster.exportToExcel();
+  });
+  document.getElementById('schools-btn-show-sel')?.addEventListener('click', () => {
+    SchoolsDataMaster.toggleSelected();
+  });
+  document.getElementById('schools-btn-columns')?.addEventListener('click', () => {
+    SchoolsDataMaster.showColumns();
+  });
+  document.getElementById('schools-btn-clear')?.addEventListener('click', () => {
+    SchoolsDataMaster.clear();
+  });
+  document.getElementById('schools-search')?.addEventListener('input', (e) => {
+    SchoolsDataMaster.search(e.target.value);
+  });
+
+  // UDISE Sandbox Mode Switches
+  document.getElementById('btn-tab-mode-get')?.addEventListener('click', () => {
+    UDISEApiPage.setMode('GET');
+  });
+  document.getElementById('btn-tab-mode-post')?.addEventListener('click', () => {
+    UDISEApiPage.setMode('POST');
   });
 
   // Initialize components
@@ -1354,5 +1468,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Expose modules to window for inline onclick handlers
 window.SchoolsDataMaster = SchoolsDataMaster;
+window.SchoolFormAndDetailModal = SchoolFormAndDetailModal;
+window.UDISEApiPage = UDISEApiPage;
 window.AppAuth = AppAuth;
 window.AppRouter = AppRouter;
+window.populateTalukasForDistrict = populateTalukasForDistrict;

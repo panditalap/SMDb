@@ -20,7 +20,7 @@
         <h4 class="fw-bold mb-0 text-primary"><i class="bi bi-box-arrow-up-right me-2"></i>External Client Webpage Simulation</h4>
         <small class="text-muted">Demonstrating cross-page asynchronous lookup via <code>GET /api/schools/udise/:udise_code</code> with CORS</small>
       </div>
-      <a href="/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to SMDb Main</a>
+      <a href="../index.html" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to SMDb Main</a>
     </div>
 
     <!-- Instructions alert -->
@@ -250,7 +250,7 @@ async function syncSchoolToSMDb(udiseCode, formData) {
         document.getElementById('field-ifsc').value = data.IFSC || '';
 
         const lastUpdated = data.Timestamp ? new Date(data.Timestamp).toLocaleString() : 'N/A';
-        statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>Loaded: ${data.Sch_Name} (UID: ${data.UID}). Last synced in SMDb: ${lastUpdated}. You may update any field below.</span>`;
+        statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>Loaded: ${data.Sch_Name} (UDISE: ${data.Sch_UDISE}). Last synced in SMDb: ${lastUpdated}. You may update any field below.</span>`;
       } catch (err) {
         statusEl.innerHTML = `<span class="text-danger fw-bold"><i class="bi bi-x-circle-fill me-1"></i>${err.message}</span>`;
       } finally {
